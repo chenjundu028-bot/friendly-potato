@@ -1,13 +1,26 @@
-name: rtl-lint
+name: ci
 
 on:
   push:
-    paths: ["rtl/**", "sim/**"]
+    paths:
+      - "rtl/**"
+      - "sim/**"
+      - "projects/**"
+      - ".github/workflows/lint.yml"
   pull_request:
-    paths: ["rtl/**", "sim/**"]
+    paths:
+      - "rtl/**"
+      - "sim/**"
+      - "projects/**"
+      - ".github/workflows/lint.yml"
 
 jobs:
-  iverilog:
+  # ------------------------------------------------------------------
+  # 功能仿真: 用 iverilog 编译并运行 sim/ 下所有 testbench
+  # 这是"是否通过"的门槛 —— 失败即 CI 跑红。
+  # ------------------------------------------------------------------
+  test:
+    name: "Functional simulation"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -15,7 +28,55 @@ jobs:
       - name: Install Icarus Verilog
         run: sudo apt-get update && sudo apt-get install -y iverilog
 
-      - name: Compile & run testbench
+      - name: Compile & run all testbenches
         run: |
-          iverilog -g2012 -o /tmp/sim.vvp sim/tb_blink.v rtl/example/blink.v
-          vvp /tmp/sim.vvp
+          set -e
+          for tb in sim/tb_*.v; do
+            [ -e "$tb" ] || continue
+            name="$(basename "$tb" .v)"           # e.g. tb_blink
+            top="${name#tb_}"                     # e.g. blink  (被测模块名)
+            src="$(find rtl -name "${top}.v" | head -n 1)"
+            echo "==> $tb  (top module: $top, source: $src)"
+            iverilog -g2012 -o "/tmp/${name}.vvp" "$tb" "$src"
+            vvp "/tmp/${name}.vvp"
+          done
+
+  # ------------------------------------------------------------------
+  # 代码质量与风格: verilator 抓硬错误(失败即红), verible 报告风格(暂不阻断)
+  # ------------------------------------------------------------------
+  lint:
+    name: "Lint & style"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install verilator
+        run: sudo apt-get update && sudo apt-get install -y verilator
+
+      - name: Download Verible (style linter)
+        run: |
+          url="$(curl -fsSL https://api.github.com/repos/chipsalliance/verible/releases/latest | python3 -c 'import sys,json;d=json.load(sys.stdin);print([a["browser_download_url"] for a in d["assets"] if a["name"].endswith("linux-static-x86_64.tar.gz")][0])')"
+          echo "Verible asset: $url"
+          curl -fsSL -o /tmp/verible.tar.gz "$url"
+          tar -xzf /tmp/verible.tar.gz -C /tmp
+          sudo cp /tmp/verible-*/bin/verible-verilog-lint /usr/local/bin/
+
+      # verilator --lint-only: 硬错误会让这个步骤失败(跑红), 警告只打印不失败
+      - name: Verilator lint (hard errors gate)
+        run: |
+          set -e
+          for f in rtl/example/*.v; do
+            echo "==> verilator --lint-only $f"
+            verilator --lint-only -Wall "$f"
+          done
+          echo "==> verilator --lint-only blink_top.v + blink.v"
+          verilator --lint-only -Wall --top-module blink_top \
+            projects/blink_basys3/blink_top.v rtl/example/blink.v
+
+      # verible-verilog-lint: 目前是"报告"模式(不阻断), 用来展示风格问题
+      - name: Verible style check (report-only for now)
+        run: |
+          verible-verilog-lint \
+            rtl/example/blink.v rtl/example/counter.v \
+            sim/tb_blink.v projects/blink_basys3/blink_top.v \
+            || echo ">>> 检测到风格问题(如上) —— 目前只报告,不阻断。想强制时告诉我。"
