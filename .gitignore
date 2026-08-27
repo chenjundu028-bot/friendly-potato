@@ -1,0 +1,51 @@
+# ---- OS / editor ----
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
+*.code-workspace.bak
+
+# ---- Generic build artifacts ----
+*.o
+*.obj
+*.elf
+*.out
+build/
+out/
+
+# ---- Vivado generated data (keep .xpr project + user sources, drop generated) ----
+.vivado/
+.Xil/
+.runs/
+.cache/
+.sim/
+.gen/
+.hw/
+.ip_user_files/
+webtalk*.jou
+webtalk*.log
+*.vds
+*.jou
+*.log
+vivado*.log
+*.xpr.bak
+
+# ---- Quartus / Intel generated data ----
+db/
+incremental_db/
+*.rpt
+*.done
+*.pin
+*.sof
+*.pof
+*.jic
+
+# ---- Simulation artifacts ----
+work/
+transcript
+*.vcd
+*.fst
+*.wlf
+*.vvp
+*.vl

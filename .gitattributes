@@ -1,0 +1,10 @@
+# Normalize line endings to LF in the repo
+* text=auto
+
+# Shell scripts always LF
+*.sh text eol=lf
+
+# RTL / scripts keep LF (avoid mixed endings)
+*.v text eol=lf
+*.sv text eol=lf
+*.tcl text eol=lf
